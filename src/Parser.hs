@@ -2,15 +2,14 @@ module Parser where
 
 import           Control.Monad
 import           Control.Monad.Except
-import           System.Environment
 import           Text.ParserCombinators.Parsec as P
                                          hiding ( spaces )
 import           LispVal
 
-parse :: String -> ThrowsError LispVal
+parse :: String -> IOResult LispVal
 parse input = case P.parse parseExpr "string" input of
   Right result -> pure result
-  Left  error  -> throwError $ Parser error
+  Left  err    -> throwError $ Parser err
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=?>@^_~#"
@@ -20,9 +19,9 @@ spaces = skipMany1 space
 
 parseString :: Parser LispVal
 parseString = do
-  char '"'
+  void $ char '"'
   x <- many (noneOf "\"")
-  char '"'
+  void $ char '"'
   return $ String x
 
 parseAtom :: Parser LispVal
@@ -31,9 +30,9 @@ parseAtom = do
   rest  <- many (letter <|> digit <|> symbol)
   let atom = [first] ++ rest
   return $ case atom of
-    "#t"      -> Bool True
-    "#f"      -> Bool False
-    otherwise -> Atom atom
+    "#t" -> Bool True
+    "#f" -> Bool False
+    _    -> Atom atom
 
 parseNumber :: Parser LispVal
 parseNumber = (Number . read) <$> many1 digit
@@ -43,21 +42,21 @@ parseList = List <$> sepBy parseExpr spaces
 
 parseDottedList :: Parser LispVal
 parseDottedList = do
-  head <- endBy parseExpr spaces
-  tail <- char '.' >> spaces >> parseExpr
-  return $ DottedList head tail
+  h <- endBy parseExpr spaces
+  t <- char '.' >> spaces >> parseExpr
+  return $ DottedList h t
 
 parseQuoted :: Parser LispVal
 parseQuoted = do
-  char '\''
+  void $ char '\''
   x <- parseExpr
   return $ List [quote, x]
 
 parseLists :: Parser LispVal
 parseLists = do
-  char '('
+  void $ char '('
   x <- (try parseList) <|> parseDottedList
-  char ')'
+  void $ char ')'
   return x
 
 parseExpr :: Parser LispVal

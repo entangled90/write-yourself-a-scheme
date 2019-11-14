@@ -5,37 +5,29 @@
 module Kernel where
 
 import           LispVal
-import           System.IO
-import qualified Data.Map                      as M
 import           Control.Monad.Except
-import           Data.IORef
 
-
-type Env = IORef (M.Map VarName (IORef LispVal))
-type VarName = String
-type IOResult = ExceptT LispError IO
 type FuncName = String
-type LispFunction = [LispVal] -> ThrowsError LispVal
 
-
-kernelOps :: Env -> [(FuncName, LispFunction)]
-kernelOps env = [("eqv?", eqv), ("equals?", weakEquals)]
+kernelOps :: [(FuncName, LispFunction)]
+kernelOps = [("eqv?", eqv), ("equals?", weakEquals)]
 
 
 eqv :: LispFunction
 eqv [String s1, String s2] = pure $ Bool $ s1 == s2
 eqv [Number s1, Number s2] = pure $ Bool $ s1 == s2
-eqv [List   s1, List s2  ] = pure $ Bool $ s1 == s2
-eqv [Bool   s1, Bool s2  ] = pure $ Bool $ s1 == s2
+eqv [List   s1, List s2  ] = (Bool) <$> (and <$> traverse eqvPair (zip s1 s2))
+  where eqvPair (a1, a2) = eqv [a1, a2] >>= unpackBool
+eqv [Bool s1, Bool s2] = pure $ Bool $ s1 == s2
 eqv [(DottedList s1 d1), (DottedList s2 d2)] =
-  pure $ Bool $ s1 == s2 && d1 == d2
+  eqv [List (s1 ++ [d1]), List (s2 ++ [d2])]
 eqv [Atom a1, Atom a2] = pure $ Bool $ a1 == a2
 eqv [_      , _      ] = pure $ Bool False
-eqv args               = throwError $ NumArgs 2 args
+eqv badArgs            = throwError $ NumArgs 2 badArgs
 
-data Unpacker = forall a . Eq a => AnyUnpacker (LispVal -> ThrowsError a)
+data Unpacker = forall a . Eq a => AnyUnpacker (LispVal -> IOResult a)
 
-unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals :: LispVal -> LispVal -> Unpacker -> IOResult Bool
 unpackEquals v1 v2 (AnyUnpacker unpacker) =
   let equals = do
         u1 <- unpacker v1
@@ -63,7 +55,7 @@ weakEquals args = throwError $ NumArgs 2 args
 
 
 
-unpackNum :: LispVal -> ThrowsError Integer
+unpackNum :: LispVal -> IOResult Integer
 unpackNum (  Number n) = pure n
 unpackNum s@(String n) = case reads n of
   (h_int, _) : _ -> pure h_int
@@ -71,11 +63,11 @@ unpackNum s@(String n) = case reads n of
 unpackNum n = throwError
   $ TypeMismatch "it should be something that can be converted to a number" n
 
-unpackStr :: LispVal -> ThrowsError String
+unpackStr :: LispVal -> IOResult String
 unpackStr (String s) = pure s
 unpackStr arg        = throwError $ TypeMismatch "expected a string" arg
 
-unpackBool :: LispVal -> ThrowsError Bool
+unpackBool :: LispVal -> IOResult Bool
 unpackBool (Bool b) = pure b
 unpackBool arg      = throwError $ TypeMismatch "expected a boolean" arg
 
@@ -84,7 +76,7 @@ strBoolBinOp = boolBinOp unpackStr
 boolBoolBinOp = boolBinOp unpackBool
 
 
-boolBinOp :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> LispFunction
+boolBinOp :: (LispVal -> IOResult a) -> (a -> a -> Bool) -> LispFunction
 boolBinOp convert op ([p1, p2]) = do
   a1 <- convert p1
   a2 <- convert p2

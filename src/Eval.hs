@@ -31,14 +31,14 @@ eval env (List (Atom func : args)) =
   traverse (eval env) args >>= apply env func
 eval env v = pure v
 
-apply :: Env -> FuncName -> [LispVal] -> ThrowsError LispVal
+apply :: Env -> FuncName -> [LispVal] -> IOResult LispVal
 apply env name args = case M.lookup name (primitives env) of
   Just f  -> f args
   Nothing -> throwError $ NotFunction name (foldMap show args)
 
 primitives :: Env -> M.Map String LispFunction
 primitives env =
-  M.fromList $ numericOps ++ typeChecks ++ boolOps ++ strOps ++ kernelOps env
+  M.fromList $ numericOps ++ typeChecks ++ boolOps ++ strOps ++ kernelOps
 
 numericOps :: [(String, LispFunction)]
 numericOps =
