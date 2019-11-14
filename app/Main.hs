@@ -1,15 +1,12 @@
 module Main where
 
-import           Lib
-import           Parser
-import           LispVal
 import           Eval
-import           System.Environment
+import           Control.Monad.Except
 
 
 main :: IO ()
 main = do
-  script : _ <- getArgs
-  case parse script of
-    Right parsed -> print $ show $ eval parsed
-    Left  err    -> print err
+  result <- runExceptT runRepl
+  case result of
+    Right _   -> pure ()
+    Left  err -> print err

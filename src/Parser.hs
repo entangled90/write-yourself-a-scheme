@@ -1,15 +1,16 @@
 module Parser where
 
 import           Control.Monad
+import           Control.Monad.Except
 import           System.Environment
 import           Text.ParserCombinators.Parsec as P
                                          hiding ( spaces )
 import           LispVal
 
-parse :: String -> Either String LispVal
+parse :: String -> ThrowsError LispVal
 parse input = case P.parse parseExpr "string" input of
-  Right result -> Right result
-  Left  error  -> Left $ show error
+  Right result -> pure result
+  Left  error  -> throwError $ Parser error
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=?>@^_~#"
